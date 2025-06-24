@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>YourName Temp Mail</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #eef2f7;
+      text-align: center;
+      padding: 40px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 2em;
+      color: #333;
+    }
+    .box {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px auto;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #emails {
+      text-align: left;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .copy-btn {
+      margin-top: 10px;
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .message-body {
+      white-space: pre-wrap;
+      background: #f6f6f6;
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>📧 Yuens Temp Mail</h1>
+    <p>No login. Disposable email. Inbox auto-refreshes.</p>
+  </div>
+
+  <div class="box">
+    <p><strong>Your Temp Email:</strong></p>
+    <p id="emailDisplay">Generating...</p>
+    <button class="copy-btn" onclick="copyEmail()">📋 Copy Email</button>
+    <p id="copyStatus"></p>
+  </div>
+
+  <div class="box" id="emails">
+    <p><strong>Inbox:</strong></p>
+    <div id="inboxContent">Waiting for messages...</div>
+  </div>
+
+  <script>
+    const apiBase = "https://api.mail.tm";
+    let token = null;
+    let emailAddress = "";
+    let password = "";
+
+    async function generateTempEmail() {
+      const randomUser = Math.random().toString(36).substring(2, 11);
+      emailAddress = `${randomUser}@mail.tm`;
+      password = "Temp123@abc";
+
+      // Try to register (may fail if email already exists)
+      await fetch(`${apiBase}/accounts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: emailAddress, password: password })
+      }).catch(() => {}); // ignore error if already exists
+
+      // Log in
+      const res = await fetch(`${apiBase}/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: emailAddress, password: password })
+      });
+
+      const data = await res.json();
+      token = data.token;
+
+      document.getElementById("emailDisplay").textContent = emailAddress;
+      fetchInbox();
+      setInterval(fetchInbox, 10000);
+    }
+
+    function copyEmail() {
+      navigator.clipboard.writeText(emailAddress).then(() => {
+        document.getElementById("copyStatus").textContent = "✅ Copied!";
+        setTimeout(() => {
+          document.getElementById("copyStatus").textContent = "";
+        }, 2000);
+      });
+    }
+
+    async function fetchInbox() {
+      if (!token) return;
+
+      const res = await fetch(`${apiBase}/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const inboxDiv = document.getElementById("inboxContent");
+      inboxDiv.innerHTML = "";
+
+      if (data["hydra:member"].length === 0) {
+        inboxDiv.innerHTML = "<p>No new messages yet.</p>";
+        return;
+      }
+
+      data["hydra:member"].forEach((msg) => {
+        const div = document.createElement("div");
+        div.style.borderBottom = "1px solid #ddd";
+        div.style.padding = "10px 0";
+        div.innerHTML = `
+          <strong>From:</strong> ${msg.from.address}<br>
+          <strong>Subject:</strong> ${msg.subject}<br>
+          <small>${new Date(msg.createdAt).toLocaleString()}</small><br>
+          <button onclick="viewMessage('${msg.id}')">📨 View Message</button>
+          <div id="msg-${msg.id}" class="message-body"></div>
+        `;
+        inboxDiv.appendChild(div);
+      });
+    }
+
+    async function viewMessage(id) {
+      const res = await fetch(`${apiBase}/messages/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const msg = await res.json();
+      const body = msg.text || msg.html || "(No content)";
+      document.getElementById(`msg-${id}`).textContent = body;
+    }
+
+    generateTempEmail();
+  </script>
+</body>
+</html>
